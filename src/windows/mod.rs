@@ -151,7 +151,7 @@ fn filetime_to_time_offsetdatetime(time: FILETIME) -> anyhow::Result<time::Offse
     // windows uses 1601-01-01 as epoch, unix 1970-01-01
     static OFFSET_TO_UNIX_TIME: i128 = 116444736000000000i128;
     let time_in_unix_epoch = time - OFFSET_TO_UNIX_TIME;
-    // windows times is in 100ns intervals
+    // filetime is in 100ns intervals
     let unix_time_nanos = time_in_unix_epoch * 100;
     Ok(time::OffsetDateTime::from_unix_timestamp_nanos(
         unix_time_nanos,
