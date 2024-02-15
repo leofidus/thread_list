@@ -1,9 +1,8 @@
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
-use derivative::Derivative;
 use memoffset::offset_of;
 use windows::Win32::{
-    Foundation::{CloseHandle, BOOL, FILETIME, HANDLE, STILL_ACTIVE},
+    Foundation::{CloseHandle, BOOL, FILETIME, STILL_ACTIVE},
     System::{
         Diagnostics::ToolHelp::{
             CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
@@ -11,15 +10,12 @@ use windows::Win32::{
         Memory::LocalFree,
         Threading::{
             GetCurrentProcessId, GetExitCodeThread, GetThreadDescription, GetThreadIOPendingFlag,
-            GetThreadTimes, OpenThread, THREAD_QUERY_INFORMATION, THREAD_QUERY_LIMITED_INFORMATION,
+            GetThreadTimes, OpenThread, THREAD_QUERY_INFORMATION,
         },
     },
 };
 
-#[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Thread {
-    id: u32,
-}
+use crate::{Stopped, Thread, ThreadInfo, ThreadStatus};
 
 impl TryFrom<THREADENTRY32> for Thread {
     type Error = anyhow::Error;
@@ -34,50 +30,6 @@ impl TryFrom<THREADENTRY32> for Thread {
             id: value.th32ThreadID,
         })
     }
-}
-
-#[derive(Derivative)]
-#[derivative(Debug)]
-pub struct ThreadInfo {
-    #[derivative(Debug(format_with = "fmt_thread"))]
-    thread: Thread,
-    name: String,
-    status: ThreadStatus,
-    #[derivative(Debug(format_with = "fmt_offsetdatetime"))]
-    created: time::OffsetDateTime,
-    kernel_time: Duration,
-    user_time: Duration,
-    io_pending: bool,
-}
-
-#[derive(Debug)]
-pub enum ThreadStatus {
-    Running,
-    Stopped(Stopped),
-}
-
-#[derive(Derivative)]
-#[derivative(Debug)]
-pub struct Stopped {
-    exit_code: u32,
-    #[derivative(Debug(format_with = "fmt_offsetdatetime"))]
-    exit_time: time::OffsetDateTime,
-}
-
-fn fmt_offsetdatetime(
-    val: &time::OffsetDateTime,
-    fmt: &mut std::fmt::Formatter,
-) -> Result<(), std::fmt::Error> {
-    // val.format_into(fmt, &time::format_description::well_known::Rfc3339)
-    fmt.write_fmt(format_args!(
-        "{}",
-        val.format(&time::format_description::well_known::Rfc3339)
-            .unwrap()
-    ))
-}
-
-fn fmt_thread(val: &Thread, fmt: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-    fmt.write_fmt(format_args!("{}", val.id))
 }
 
 impl Thread {
@@ -158,7 +110,7 @@ fn filetime_to_time_offsetdatetime(time: FILETIME) -> anyhow::Result<time::Offse
     )?)
 }
 
-pub fn list_threads() -> anyhow::Result<Vec<Thread>> {
+pub(crate) fn get_threads() -> anyhow::Result<Vec<Thread>> {
     let mut res: Vec<Thread> = Vec::new();
     unsafe {
         let process_id = GetCurrentProcessId();
